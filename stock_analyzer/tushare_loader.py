@@ -20,6 +20,22 @@ logger = logging.getLogger("tushare_loader")
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(PROJECT_ROOT, "stock_cache.db")
 
+# ── 限速控制（强制间隔，防止触发API限流）──
+_API_CALL_INTERVAL = 0.5  # 每次API请求间隔秒数
+_last_api_call = 0.0
+_api_lock = threading.Lock()
+
+
+def _rate_limit():
+    """强制限速：每次API调用至少间隔 0.5 秒"""
+    global _last_api_call
+    with _api_lock:
+        elapsed = time.time() - _last_api_call
+        if elapsed < _API_CALL_INTERVAL:
+            time.sleep(_API_CALL_INTERVAL - elapsed)
+        _last_api_call = time.time()
+
+
 # 作业状态追踪
 _jobs: dict = {}
 _jobs_lock = threading.Lock()
@@ -171,6 +187,7 @@ def download_daily_history(start_date: str = "2025-01-01",
         total = 0
         for i, td in enumerate(trade_dates):
             try:
+                _rate_limit()  # 强制0.5秒间隔，防止触发限流
                 df = pro.daily(trade_date=td)
                 if df is None or df.empty:
                     continue
@@ -392,6 +409,7 @@ def download_moneyflow_latest(days: int = 1, progress_cb: Optional[Callable] = N
         if progress_cb:
             progress_cb(0, 1, f"资金流向 {td} 拉取中...")
         try:
+            _rate_limit()  # 强制0.5秒间隔
             df = pro.moneyflow(trade_date=td)
             if df is None or df.empty:
                 continue
