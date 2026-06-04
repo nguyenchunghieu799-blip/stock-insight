@@ -16,6 +16,13 @@ reports/*.json
 .scan_progress
 .kline_warmup_progress.json
 .warmup_progress.json
+.cache/
+full_scan_log.txt
+alerts_log.txt
+mainboard_candidates_*.json
+mainboard_owned_2026052*.json
+mainboard_summary_*.csv
+~$*
 *.json
 !package.json
 !package-lock.json
