@@ -177,6 +177,19 @@ export interface StockAnalysisResult {
   risk_warnings?: RiskWarning[];
   data_sources?: DataSourceInfo;
   business_quality?: BusinessQuality;
+  chip_concentration?: ChipConcentration;
+}
+
+export interface ChipConcentration {
+  pct90: number;
+  pct70: number;
+  avg_cost: number;
+  current_price: number;
+  level: string;
+  risk_warning: string;
+  cost_range_90: [number, number];
+  cost_range_70: [number, number];
+  lookback_days: number;
 }
 
 export interface PortfolioHolding {

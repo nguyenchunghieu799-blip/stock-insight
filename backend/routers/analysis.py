@@ -339,7 +339,8 @@ def _run_analysis(code: str, full: bool = True) -> dict:
         result["data_sources"] = _build_data_sources(r)
         try:
             from stock_analyzer.business_quality import full_business_quality
-            result["business_quality"] = full_business_quality(code)
+            result["chip_concentration"] = _build_chip_concentration(code, kline)
+        result["business_quality"] = full_business_quality(code)
         except Exception:
             result["business_quality"] = None
 
@@ -800,6 +801,15 @@ def _build_risk_warnings(r, sector_result=None):
     risks.append({"level": "info", "message": "以上分析基于历史数据和量化模型，不构成投资建议。市场有风险，投资需谨慎。"})
 
     return risks
+
+
+def _build_chip_concentration(code, kline):
+    """筹码集中度分析"""
+    try:
+        from stock_analyzer.chip_concentration import calc_chip_concentration
+        return calc_chip_concentration(kline)
+    except Exception:
+        return {"pct90": 0, "pct70": 0, "level": "无法评估", "risk_warning": ""}
 
 
 def _build_data_sources(r):
