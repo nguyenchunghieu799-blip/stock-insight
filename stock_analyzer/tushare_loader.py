@@ -300,15 +300,6 @@ def download_daily_basic(start_date: str = "2025-01-01",
 # 作业管理
 # ═══════════════════════════════════════════
 
-JOB_TYPES = {
-    "trade_calendar": ("交易日历", download_trade_calendar),
-    "stock_basic": ("股票列表", download_stock_basic),
-    "daily_history": ("日线历史", download_daily_history),
-    "daily_basic": ("基本面数据", download_daily_basic),
-    "moneyflow": ("资金流向", download_moneyflow_latest),
-}
-
-
 def submit_job(job_type: str, params: Optional[dict] = None) -> str:
     """提交数据下载作业，返回 job_id"""
     import uuid
@@ -495,3 +486,16 @@ def list_jobs(limit: int = 20, status_filter: Optional[str] = None) -> list:
         jobs = [j for j in jobs if j["status"] == status_filter]
     jobs.sort(key=lambda j: j["started"], reverse=True)
     return jobs[:limit]
+
+
+# ═══════════════════════════════════════════
+# 作业类型注册（所有函数定义之后）
+# ═══════════════════════════════════════════
+
+JOB_TYPES = {
+    "trade_calendar": ("交易日历", download_trade_calendar),
+    "stock_basic": ("股票列表", download_stock_basic),
+    "daily_history": ("日线历史", download_daily_history),
+    "daily_basic": ("基本面数据", download_daily_basic),
+    "moneyflow": ("资金流向", download_moneyflow_latest),
+}
