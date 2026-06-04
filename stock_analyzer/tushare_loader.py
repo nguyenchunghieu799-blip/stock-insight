@@ -151,6 +151,60 @@ def download_stock_basic(progress_cb: Optional[Callable] = None):
         conn.close()
 
 
+def download_industry(progress_cb: Optional[Callable] = None):
+    """下载全量股票行业分类到 SQLite（用于选股时按行业过滤）"""
+    pro = get_tushare_pro()
+    conn = _get_conn()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS stock_industry (
+                code TEXT PRIMARY KEY,
+                industry TEXT,
+                update_time REAL
+            )
+        """)
+        _rate_limit()
+        df = pro.stock_basic(list_status='L', fields='ts_code,industry')
+        if df is None or df.empty:
+            return 0
+        now = time.time()
+        rows = [(r["ts_code"].split(".")[0], r["industry"], now) for _, r in df.iterrows()]
+        conn.executemany("INSERT OR REPLACE INTO stock_industry VALUES (?,?,?)", rows)
+        conn.commit()
+        n = len(rows)
+        if progress_cb:
+            progress_cb(n, n, f"行业分类 {n} 只")
+        logger.info(f"行业分类: {n} 只")
+        return n
+    finally:
+        conn.close()
+
+
+def get_industry(code: str) -> str:
+    """快速查询个股行业（先从SQLite读，无数据返回空）"""
+    conn = _get_conn()
+    try:
+        cur = conn.execute("SELECT industry FROM stock_industry WHERE code=?", (code,))
+        row = cur.fetchone()
+        return row[0] if row else ""
+    except Exception:
+        return ""
+    finally:
+        conn.close()
+
+
+def get_stocks_by_industry(industry: str) -> list:
+    """获取某行业的所有股票代码"""
+    conn = _get_conn()
+    try:
+        cur = conn.execute("SELECT code FROM stock_industry WHERE industry=?", (industry,))
+        return [r[0] for r in cur.fetchall()]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
 # ═══════════════════════════════════════════
 # 日线历史
 # ═══════════════════════════════════════════
@@ -495,6 +549,7 @@ def list_jobs(limit: int = 20, status_filter: Optional[str] = None) -> list:
 JOB_TYPES = {
     "trade_calendar": ("交易日历", download_trade_calendar),
     "stock_basic": ("股票列表", download_stock_basic),
+    "industry": ("行业分类", download_industry),
     "daily_history": ("日线历史", download_daily_history),
     "daily_basic": ("基本面数据", download_daily_basic),
     "moneyflow": ("资金流向", download_moneyflow_latest),
