@@ -650,8 +650,45 @@ def get_intraday_kline(code, scale=60, count=120):
     return pd.DataFrame()
 
 
+def _tickflow_kline(code, days):
+    """TickFlow 日K线（第七备选，免费免注册，盘后数据）
+
+    代码格式转换: 600519 → 600519.SH, 000001 → 000001.SZ
+    """
+    try:
+        if code.startswith("6"):
+            symbol = f"{code}.SH"
+        elif code.startswith("0") or code.startswith("3"):
+            symbol = f"{code}.SZ"
+        else:
+            return pd.DataFrame()
+
+        from tickflow import TickFlow
+        tf = TickFlow.free()
+        df = tf.klines.get(symbol, period="1d", count=days, as_dataframe=True)
+        if df is None or df.empty or len(df) < 20:
+            return pd.DataFrame()
+
+        # 统一字段名
+        rows = []
+        for _, row in df.iterrows():
+            rows.append({
+                "日期": str(row["trade_date"])[:10],
+                "开盘": round(float(row["open"]), 2),
+                "收盘": round(float(row["close"]), 2),
+                "最高": round(float(row["high"]), 2),
+                "最低": round(float(row["low"]), 2),
+                "成交量": int(row["volume"]),
+                "成交额": round(float(row["amount"]), 2),
+            })
+        result = pd.DataFrame(rows)
+        return result.tail(days) if len(result) > days else result
+    except Exception:
+        return pd.DataFrame()
+
+
 def get_kline(code, days=120):
-    """获取日K线（六源容灾：根据网络健康动态调整优先级）
+    """获取日K线（七源容灾：根据网络健康动态调整优先级）
 
     优先使用当前最快源，失败或限流时自动切换。
     返回 DataFrame，包含 日期/开盘/收盘/最高/最低/成交量/涨跌幅 等标准列。
@@ -674,7 +711,7 @@ def get_kline(code, days=120):
     except Exception:
         pass  # 健康检测不可用，走默认容灾链
 
-    # 默认容灾链：新浪→腾讯→Baostock→AData→TuShare→yquoter
+    # 默认容灾链：新浪→腾讯→Baostock→AData→TuShare→yquoter→TickFlow
     df = _sina_kline(code, days)
     if not df.empty:
         return df
@@ -690,7 +727,10 @@ def get_kline(code, days=120):
     df = _tushare_kline(code, days)
     if not df.empty:
         return df
-    return _yquoter_kline(code, days)
+    df = _yquoter_kline(code, days)
+    if not df.empty:
+        return df
+    return _tickflow_kline(code, days)
 
 
 # ── 板块数据（东方财富，多重重试+静态兜底）────
