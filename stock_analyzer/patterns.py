@@ -536,3 +536,150 @@ def _generate_key_observation(patterns, trend, df):
         return f"短期形态偏空（{'、'.join([p['name'] for p in bearish[:2]])}），建议减仓或观望。"
 
     return "形态信号中性，继续观察。"
+
+
+def merge_today_data(df, today_open, today_high, today_low, today_close, today_volume):
+    """将当日盘中实时数据追加到K线DataFrame末尾
+
+    Args:
+        df: 缓存K线DataFrame（至昨日）
+        today_open/close/high/low/volume: 当日实时数据
+
+    Returns:
+        合并后的DataFrame（含今日盘中K线）
+    """
+    import datetime
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    new_row = pd.DataFrame([{
+        "日期": today_str,
+        "开盘": today_open,
+        "收盘": today_close,
+        "最高": today_high,
+        "最低": today_low,
+        "成交量": today_volume,
+    }])
+    combined = pd.concat([df, new_row], ignore_index=True)
+    return combined
+
+
+def get_today_pattern(today_open, today_high, today_low, today_close, prev_row, trend):
+    """单独判断当日K线形态
+
+    Args:
+        today_open/close/high/low: 当日盘中数据
+        prev_row: 昨日K线Series
+        trend: 当前趋势方向
+
+    Returns:
+        dict: {name, type, description, reliability} 或 None
+    """
+    # 构造当日行和前一日行
+    import pandas as pd
+    today = pd.Series({
+        "开盘": today_open, "收盘": today_close,
+        "最高": today_high, "最低": today_low,
+    })
+
+    # 检查单根形态
+    if is_doji(today):
+        return _make_pattern("十字星", "今日盘中")
+    if is_big_bullish(today):
+        return _make_pattern("大阳线", "今日盘中")
+    if is_big_bearish(today):
+        return _make_pattern("大阴线", "今日盘中")
+    if is_hammer(today, trend):
+        return _make_pattern("锤子线", "今日盘中")
+    if is_inverted_hammer(today, trend):
+        return _make_pattern("倒锤子", "今日盘中")
+    if is_shooting_star(today, trend):
+        return _make_pattern("射击之星", "今日盘中")
+
+    # 两根形态（今日+昨日）
+    prev = pd.Series({
+        "开盘": float(prev_row["开盘"]), "收盘": float(prev_row["收盘"]),
+        "最高": float(prev_row["最高"]), "最低": float(prev_row["最低"]),
+    })
+    if is_bullish_engulfing(prev, today):
+        return _make_pattern("看涨吞没", "今日盘中")
+    if is_bearish_engulfing(prev, today):
+        return _make_pattern("看跌吞没", "今日盘中")
+    if is_bullish_harami(prev, today):
+        return _make_pattern("看涨孕线", "今日盘中")
+    if is_bearish_harami(prev, today):
+        return _make_pattern("看跌孕线", "今日盘中")
+    if is_dark_cloud_cover(prev, today):
+        return _make_pattern("乌云盖顶", "今日盘中")
+    if is_piercing_pattern(prev, today):
+        return _make_pattern("刺透形态", "今日盘中")
+
+    # 基础分类（未命中特殊形态时）
+    body = abs(today_close - today_open)
+    total = today_high - today_low
+    if total > 0:
+        upper = today_high - max(today_close, today_open)
+        lower = min(today_close, today_open) - today_low
+        chg = round((today_close - today_open) / today_open * 100, 2)
+        body_ratio = body / total * 100
+        features = []
+        if upper > body * 2:
+            features.append("长上影")
+        if lower > body * 2:
+            features.append("长下影")
+
+        if body_ratio > 60 and chg > 2:
+            btype = "bullish"
+            name = "大阳线"
+            desc = f"今日大阳线涨{chg:.2f}%，买方力量极强。"
+        elif body_ratio > 60 and chg < -2:
+            btype = "bearish"
+            name = "大阴线"
+            desc = f"今日大阴线跌{abs(chg):.2f}%，卖方完全主导。"
+        elif features:
+            shape = "阳线" if today_close > today_open else "阴线"
+            name = f"{shape}({'，'.join(features)})"
+            btype = "bearish" if "长上影" in features else "bullish" if "长下影" in features else "neutral"
+            desc = f"今日{'高开低走' if today_close < today_open else '低开高走'}，{'，'.join(features)}。{'上方抛压沉重' if '长上影' in features else '下方支撑明显' if '长下影' in features else ''}"
+        elif chg > 0:
+            btype = "bullish"
+            name = "阳线"
+            desc = f"今日阳线涨{chg:.2f}%，实体占比{body_ratio:.0f}%，温和上涨。"
+        elif chg < -1:
+            btype = "bearish"
+            name = "阴线"
+            desc = f"今日阴线跌{abs(chg):.2f}%，实体占比{body_ratio:.0f}%。"
+        else:
+            btype = "neutral"
+            name = "小实体"
+            desc = f"今日小实体({'阳' if chg>0 else '阴'})，涨跌{chg:+.2f}%，方向不明确。"
+
+        return {
+            "name": name, "date": "今日盘中", "type": btype,
+            "description": desc, "reliability": "中",
+        }
+
+    return None
+
+
+def generate_kline_interpretation_with_today(df, today_open=None, today_high=None, today_low=None, today_close=None, today_volume=None):
+    """含当日数据的完整K线解读
+
+    如果提供了当日数据，会先合并再分析。
+    """
+    if today_open is not None and today_close is not None:
+        df = merge_today_data(df, today_open, today_high, today_low, today_close, today_volume or 0)
+
+    result = generate_kline_interpretation(df)
+
+    # 单独标注今日形态
+    if today_open is not None and today_close is not None and len(df) >= 2:
+        today = df.iloc[-1]
+        prev = df.iloc[-2]
+        trend = result.get("trend_phase", "横盘整理")
+        today_pat = get_today_pattern(today_open, today_high, today_low, today_close, prev, trend)
+        if today_pat:
+            result["today_pattern"] = today_pat
+            result["today_chg"] = round((today_close - today_open) / today_open * 100, 2)
+            # 把今日形态也加到最近形态列表最前面
+            result["recent_patterns"] = [today_pat] + result["recent_patterns"]
+
+    return result

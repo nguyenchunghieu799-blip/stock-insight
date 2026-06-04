@@ -327,7 +327,7 @@ def _run_analysis(code: str, full: bool = True) -> dict:
 
         # 11段分析新增
         result["sector_analysis"] = _build_sector_analysis(code, r)
-        result["pattern_analysis"] = _build_pattern_analysis(kline)
+        result["pattern_analysis"] = _build_pattern_analysis(kline, info)
         result["manipulator_intention"] = _build_manipulator_intention(code, r)
         result["retail_psychology"] = _build_retail_psychology(r)
         result["prediction"] = _build_prediction(r)
@@ -586,11 +586,20 @@ def _build_sector_analysis(code, r):
         }
 
 
-def _build_pattern_analysis(kline):
-    """K线形态解读"""
+def _build_pattern_analysis(kline, rt_info=None):
+    """K线形态解读（含当日盘中数据）"""
     try:
-        from stock_analyzer.patterns import generate_kline_interpretation
-        return generate_kline_interpretation(kline)
+        from stock_analyzer.patterns import generate_kline_interpretation_with_today
+        if rt_info and rt_info.get("今开") and rt_info.get("最新价"):
+            return generate_kline_interpretation_with_today(
+                kline,
+                today_open=float(rt_info.get("今开", 0) or 0),
+                today_high=float(rt_info.get("最高", 0) or 0),
+                today_low=float(rt_info.get("最低", 0) or 0),
+                today_close=float(rt_info.get("最新价", 0) or 0),
+                today_volume=int(float(rt_info.get("成交量", 0) or 0)),
+            )
+        return generate_kline_interpretation_with_today(kline)
     except Exception:
         return {
             "recent_patterns": [], "summary": "K线形态分析暂不可用",
