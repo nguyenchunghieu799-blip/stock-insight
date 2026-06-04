@@ -531,28 +531,65 @@ def _adata_kline(code, days):
         return pd.DataFrame()
 
 
-def _tushare_kline(code, days):
-    """TuShare 日K线（第五备选，需注册获取token，数据质量最高）
-
-    TuShare token 设置方式（选一）：
-      1. 环境变量: set TUSHARE_TOKEN=your_token
-      2. config.py: TUSHARE_TOKEN = 'your_token'
-    未设置token时自动跳过。
-    """
+def _get_tushare_token():
+    """获取 Tushare token，优先 .env 再环境变量再 config"""
+    # 从 .env 文件读取
+    try:
+        env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+        if os.path.exists(env_file):
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("TUSHARE_TOKEN="):
+                        return line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    # 环境变量
+    token = os.environ.get("TUSHARE_TOKEN", "")
+    if token:
+        return token
+    # config.py
     try:
         from .config import TUSHARE_TOKEN
+        return TUSHARE_TOKEN
     except ImportError:
-        TUSHARE_TOKEN = os.environ.get("TUSHARE_TOKEN", "")
-    if not TUSHARE_TOKEN:
+        return ""
+
+
+def _get_tushare_api_url():
+    """获取 Tushare API 地址，支持代理"""
+    try:
+        env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+        if os.path.exists(env_file):
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("TUSHARE_API_URL="):
+                        return line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return ""
+
+
+def _tushare_kline(code, days):
+    """TuShare 日K线（第五备选，需注册获取token，支持代理API）
+
+    配置方式：在 .env 文件中设置 TUSHARE_TOKEN 和 TUSHARE_API_URL（代理地址，可选）
+    """
+    token = _get_tushare_token()
+    if not token:
         return pd.DataFrame()
 
     try:
         import tushare as ts
-        pro = ts.pro_api(TUSHARE_TOKEN)
+        ts.set_token(token)
+        pro = ts.pro_api()
+        api_url = _get_tushare_api_url()
+        if api_url:
+            pro._DataApi__http_url = api_url
+
         symbol = f"{code}.{'SH' if code.startswith('6') else 'SZ'}"
         end = datetime.now().strftime("%Y%m%d")
         start = (datetime.now() - timedelta(days=days + 60)).strftime("%Y%m%d")
-        df = pro.daily(ts_code=symbol, start_date=start, end_date=end)
+        df = ts.pro_bar(ts_code=symbol, api=pro, start_date=start, end_date=end)
         if df is None or df.empty or len(df) < 20:
             return pd.DataFrame()
         df = df.sort_values('trade_date')

@@ -72,5 +72,6 @@ async def job_types():
             {"id": "stock_basic", "name": "股票列表", "desc": "下载全量A股基础信息"},
             {"id": "daily_history", "name": "日线历史", "desc": "按交易日逐日下载日K线 (需先下载交易日历)"},
             {"id": "daily_basic", "name": "基本面数据", "desc": "下载每日PE/PB/市值等基本面指标"},
+            {"id": "moneyflow", "name": "资金流向", "desc": "下载个股每日资金流向(主力/超大单/大单/中单/小单)"},
         ]
     })

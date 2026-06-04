@@ -26,14 +26,39 @@ _jobs_lock = threading.Lock()
 
 
 def get_tushare_pro():
-    """初始化 Tushare API"""
-    from stock_analyzer.config import TUSHARE_TOKEN
-    token = TUSHARE_TOKEN or os.environ.get("TUSHARE_TOKEN", "")
+    """初始化 Tushare API（支持代理）"""
+    token = ""
+    api_url = ""
+    # 1. 从 .env 文件读取
+    try:
+        env_file = os.path.join(PROJECT_ROOT, ".env")
+        if os.path.exists(env_file):
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("TUSHARE_TOKEN="):
+                        token = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                    elif line.startswith("TUSHARE_API_URL="):
+                        api_url = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    # 2. 环境变量
     if not token:
-        raise RuntimeError("未配置 TUSHARE_TOKEN，请在 config.py 或环境变量中设置")
+        token = os.environ.get("TUSHARE_TOKEN", "")
+    # 3. config.py
+    if not token:
+        try:
+            from stock_analyzer.config import TUSHARE_TOKEN
+            token = TUSHARE_TOKEN
+        except ImportError:
+            pass
+    if not token:
+        raise RuntimeError("未配置 TUSHARE_TOKEN，请在 .env 文件、环境变量或 config.py 中设置")
     import tushare as ts
     ts.set_token(token)
-    return ts.pro_api()
+    pro = ts.pro_api()
+    if api_url:
+        pro._DataApi__http_url = api_url
+    return pro
 
 
 def _get_conn():
@@ -263,6 +288,7 @@ JOB_TYPES = {
     "stock_basic": ("股票列表", download_stock_basic),
     "daily_history": ("日线历史", download_daily_history),
     "daily_basic": ("基本面数据", download_daily_basic),
+    "moneyflow": ("资金流向", download_moneyflow_latest),
 }
 
 
