@@ -33,8 +33,8 @@ export default function Portfolio() {
       const json = await res.json();
       if (json.success) setData(json.data);
       else setError(json.error);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) { const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -61,8 +61,8 @@ export default function Portfolio() {
       } else {
         setError(json.error || "无法加载持仓");
       }
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) { const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
     } finally {
       setLoading(false);
     }

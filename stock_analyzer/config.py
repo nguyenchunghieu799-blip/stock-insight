@@ -49,7 +49,7 @@ ARCHIVE_DIR = os.path.join(ROOT_DIR, "archive")
 ALERTS_PATH = os.path.join(ROOT_DIR, "alerts.json")
 ALERTS_LOG_PATH = os.path.join(ROOT_DIR, "alerts_log.txt")
 STOCK_LIST_CACHE = os.path.join(ROOT_DIR, "stock_list_cache.json")
-CHECKPOINT_FILE = os.path.join(ROOT_DIR, ".scan_checkpoint.json")
+CHECKPOINT_FILE = os.path.join(ROOT_DIR, ".scan_progress")
 
 # 确保目录存在
 for _d in [REPORT_DIR, CHART_DIR, PORTFOLIO_DIR, LOG_DIR, ARCHIVE_DIR]:

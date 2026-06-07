@@ -230,7 +230,8 @@ def cached_kline(code, days=120):
 
         # 增量拉取：仅交易日(排除周末) + 盘后或数据落后，避免无效API调用
         is_weekend = today.weekday() >= 5
-        if not is_weekend and (days_passed >= 2 or today.hour >= 15):
+        # Allow update on weekends if data is stale (missed Friday)
+        if (not is_weekend or days_passed >= 2) and (days_passed >= 2 or today.hour >= 15):
             try:
                 missing_days = max(days_passed + 2, 5)
                 new_data = get_kline(code, days=missing_days)

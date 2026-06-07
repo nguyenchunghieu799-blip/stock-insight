@@ -10,10 +10,12 @@ def generate(code: str):
     from stock_analyzer.short_term import short_term_score, calc_combo_signals, calc_multi_timeframe_resonance
     from stock_analyzer.fetcher import sina_real_time, get_market_overview
     from stock_analyzer.sector_info import get_stock_sector_full
-    from stock_analyzer.ml_predict import predict_ensemble
+    from stock_analyzer.ml_predict import _cached_predict_ensemble
     from stock_analyzer.advanced import macro_market_signal
     from stock_analyzer.nl_report import generate_bull_bear_debate
     from stock_analyzer.backtest import compare_strategies
+    from stock_analyzer.patterns import generate_kline_interpretation_with_today
+    from stock_analyzer.psychology import analyze_manipulator_intention
 
     print(f"正在分析 {code} ...")
     kline = full_technical_analysis(cached_kline(code, days=365))
@@ -29,11 +31,14 @@ def generate(code: str):
     combo = calc_combo_signals(kline)
     mr = calc_multi_timeframe_resonance(code)
     rt = sina_real_time([code])
+    # Note: During trading hours (9:30-15:00 Mon-Fri), real-time price differs from cached close
+    # The analysis uses cached K-line for technical indicators and real-time price for current value
+    # On weekends (Sat-Sun), data reflects last trading day (Friday)
     info = rt.get(code, {})
     name = info.get("名称", code)
     market = get_market_overview()
     sector = get_stock_sector_full(code)
-    ml = predict_ensemble(kline, funds)
+    ml = _cached_predict_ensemble(kline, funds)
     n5 = round((kline["收盘"].iloc[-1] / kline["收盘"].iloc[-6] - 1) * 100, 2)
     n20 = round((kline["收盘"].iloc[-1] / kline["收盘"].iloc[-21] - 1) * 100, 2)
     n60 = round((kline["收盘"].iloc[-1] / kline["收盘"].iloc[-61] - 1) * 100, 2)
@@ -144,7 +149,7 @@ def generate(code: str):
     doc.add_paragraph()
     vp = doc.add_paragraph(); vp.alignment = WD_ALIGN_PARAGRAPH.CENTER
     vp.add_run(f'📊 {verdict}').font.size = Pt(13)
-    doc.add_paragraph(f'报告时间: {datetime.now().strftime("%Y-%m-%d %H:%M")} (数据为最近交易日收盘价)')
+    doc.add_paragraph(f'报告日期: {datetime.now().strftime("%Y-%m-%d")} (K线数据至 {str(kline.iloc[-1][chr(26085)+chr(26399)])[:10]}, 实时价 {price:.2f})')
     doc.add_page_break()
 
     # ═══ 一、一句话总结 ═══
@@ -186,6 +191,36 @@ def generate(code: str):
         f'   压力位 {[round(float(x), 2) for x in sr.get("压力位", [price * 1.1])[:2]]}（涨到这里可能遇阻回落）\n'
         f'   ATR(平均真实波幅): {atr:.2f} 元 — 数值越大说明股价波动越剧烈')
 
+
+    # K-line patterns
+    doc.add_page_break()
+    doc.add_heading('K线形态分析', level=1)
+    doc.add_paragraph('K线形态反映市场情绪，以下是近期出现的典型形态：', style='Intense Quote')
+    try:
+        interp = generate_kline_interpretation_with_today(kline)
+        trend = interp.get('trend_phase', '')
+        recent = interp.get('recent_patterns', [])
+        summary = interp.get('summary', '')
+        key_obs = interp.get('key_observation', '')
+
+        doc.add_paragraph('当前趋势阶段：' + str(trend))
+
+        if recent:
+            for p in recent:
+                tag = '看涨' if p.get('type') == 'bullish' else '看跌'
+                doc.add_paragraph('  ' + tag + ': ' + p['name'] + ' (' + p['date'] + ')')
+                doc.add_paragraph('    ' + p['description'][:120])
+        else:
+            doc.add_paragraph('近期未检测到典型K线形态。')
+
+        if summary:
+            doc.add_paragraph('')
+            doc.add_paragraph(summary[:250])
+        if key_obs:
+            doc.add_paragraph('')
+            doc.add_paragraph(key_obs[:200])
+    except Exception as e:
+        doc.add_paragraph('K线形态分析暂不可用')
     # ═══ 四、量化评分 ═══
     add_colored_heading('四、量化评分（综合打分）', level=1)
     doc.add_paragraph('我们用7个因子给股票打分（满分100），综合考虑了涨跌幅、技术指标、基本面、成交量、风险等。')
@@ -214,6 +249,26 @@ def generate(code: str):
                    [f"每股收益", f"{eps}", "每持有一股能分到多少利润。数值越高越好"],
                    [f"主力资金(5日)", f"{total_flow:+.2f}亿", "大资金最近5天是买入还是卖出。正数=大资金在买，负数=在卖"]])
 
+
+    # Manipulator intention
+    doc.add_page_break()
+    doc.add_heading('庄家意图分析', level=1)
+    doc.add_paragraph('识别庄家四阶段：建仓 → 洗盘 → 拉升 → 出货', style='Intense Quote')
+    try:
+        mi = analyze_manipulator_intention(kline, {'price': price, 'atr': atr})
+        phase = mi.get('phase', '?')
+        conf = mi.get('phase_confidence', 0)
+        doc.add_paragraph('当前阶段：' + phase + '（置信度' + str(conf) + '%)')
+        for s in mi.get('signals', []):
+            doc.add_paragraph('  * ' + s)
+        if mi.get('volume_analysis'):
+            doc.add_paragraph('成交量分析：' + mi['volume_analysis'])
+        if mi.get('assessment'):
+            doc.add_paragraph('综合评估：' + mi['assessment'])
+        if mi.get('risk_note'):
+            doc.add_paragraph('风险提示：' + mi['risk_note'])
+    except Exception as e:
+        doc.add_paragraph('分析暂不可用：' + str(e)[:60])
     # ═══ 六、AI 预测 ═══
     add_colored_heading('六、AI 预测（机器学习判断）', level=1)
     doc.add_paragraph('AI用三个模型（XGBoost/RandomForest/LightGBM）分析历史数据，预测股票短期涨跌。')
@@ -298,7 +353,7 @@ def generate(code: str):
     p.add_run('本报告由AI自动生成，所有分析仅供参考学习，不构成任何投资建议。'
               '股市有风险，投资需谨慎。请根据自身情况独立做出投资决策。')
     doc.add_paragraph(f'数据来源: 新浪财经(实时行情) | Baostock(行业分类) | akshare(基本面) | 东方财富(板块资金)')
-    doc.add_paragraph(f'数据时间: {datetime.now().strftime("%Y-%m-%d %H:%M")} (非交易日则为最近交易日收盘价)')
+    doc.add_paragraph(f'数据时间: K线来源 {str(kline.iloc[-1][chr(26085)+chr(26399)])[:10]}  |  实时行情 {datetime.now().strftime("%H:%M")} (非交易日为上一交易日)')
 
     path = f'reports/{name}_深度分析_{datetime.now().strftime("%Y%m%d_%H%M")}.docx'
     os.makedirs('reports', exist_ok=True)

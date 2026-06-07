@@ -388,6 +388,27 @@ def _profit_quality_rating(a):
 # ═══════════════════════════════════════════
 
 def get_macro_indicators():
+    import sqlite3, json
+    from datetime import datetime
+    conn = sqlite3.connect('stock_cache.db')
+    conn.execute('CREATE TABLE IF NOT EXISTS macro_cache (key TEXT PRIMARY KEY, value TEXT, ts TEXT)')
+    cur = conn.execute('SELECT value, ts FROM macro_cache WHERE key=?', ('macro_indicators',))
+    row = cur.fetchone()
+    if row:
+        ts = datetime.fromisoformat(row[1])
+        if (datetime.now() - ts).days < 7:
+            conn.close()
+            return json.loads(row[0])
+    conn.close()
+    result = _fetch_macro_indicators()
+    conn = sqlite3.connect('stock_cache.db')
+    conn.execute('INSERT OR REPLACE INTO macro_cache VALUES (?,?,?)', ('macro_indicators', json.dumps(result), datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return result
+
+def _fetch_macro_indicators():
+
     """主要宏观指标汇总"""
     result = {}
     try:

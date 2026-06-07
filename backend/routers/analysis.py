@@ -21,7 +21,7 @@ async def analyze_stock(code: str):
     """个股标准分析（L0-L5 基础层）"""
     t0 = time.time()
     try:
-        result = _run_analysis(code, full=False)
+        result = _cached_analysis(code, full=False)
         return _ok(result, timing=(time.time()-t0)*1000)
     except Exception as e:
         return _err(e)
@@ -32,7 +32,7 @@ async def analyze_stock_full(code: str):
     """个股全维度分析（L0-L7 + 多空辩论 + ML 预测）"""
     t0 = time.time()
     try:
-        result = _run_analysis(code, full=True)
+        result = _cached_analysis(code, full=True)
         return _ok(result, timing=(time.time()-t0)*1000)
     except Exception as e:
         return _err(e)
@@ -286,9 +286,28 @@ async def get_fund_flow_data(code: str, days: int = Query(20)):
 
 # ── 内部辅助 ───────────────────────────────────────
 
+# Analysis result cache (in-memory, 5-minute TTL)
+_ANALYSIS_CACHE = {}
+_CACHE_TTL = 300  # seconds
+
+
+def _cached_analysis(code: str, full: bool = True) -> dict:
+    """Cache-aware analysis wrapper"""
+    import time
+    key = f"{code}:{'full' if full else 'std'}"
+    now = time.time()
+    if key in _ANALYSIS_CACHE:
+        entry = _ANALYSIS_CACHE[key]
+        if now - entry['time'] < _CACHE_TTL:
+            return entry['result']
+    result = _run_analysis(code, full=full)
+    _ANALYSIS_CACHE[key] = {'result': result, 'time': now}
+    return result
+
+
 def _run_analysis(code: str, full: bool = True) -> dict:
     """执行完整分析流水线，返回结构化 dict"""
-    from cli import deep_analyze
+    from stock_analyzer.analyzer import deep_analyze
     from stock_analyzer.analysis import get_technical_summary, calc_support_resistance
     from stock_analyzer.fetcher import sina_real_time
 
@@ -340,7 +359,7 @@ def _run_analysis(code: str, full: bool = True) -> dict:
         try:
             from stock_analyzer.business_quality import full_business_quality
             result["chip_concentration"] = _build_chip_concentration(code, kline)
-        result["business_quality"] = full_business_quality(code)
+            result["business_quality"] = full_business_quality(code)
         except Exception:
             result["business_quality"] = None
 
@@ -457,12 +476,12 @@ def _build_debate(code, r):
     try:
         from stock_analyzer.nl_report import generate_bull_bear_debate
         from stock_analyzer.analysis import get_technical_summary, calc_support_resistance
-        from stock_analyzer.ml_predict import predict_ensemble
+        from stock_analyzer.ml_predict import _cached_predict_ensemble
 
         kline = r["_kline"]
         tech_sum = get_technical_summary(kline)
         sr = calc_support_resistance(kline)
-        ai = predict_ensemble(kline, {})
+        ai = _cached_predict_ensemble(kline, {})
         price = r.get("price", 0)
 
         debate = generate_bull_bear_debate({
@@ -505,8 +524,8 @@ def _safe(v):
 
 def _build_ml(r):
     try:
-        from stock_analyzer.ml_predict import predict_ensemble
-        ai = predict_ensemble(r["_kline"], {})
+        from stock_analyzer.ml_predict import _cached_predict_ensemble
+        ai = _cached_predict_ensemble(r["_kline"], {})
         return _safe({
             "direction": ai.get("ensemble_direction", "?"),
             "confidence": ai.get("ensemble_confidence", 0),
@@ -640,8 +659,8 @@ def _build_retail_psychology(r):
 def _build_prediction(r):
     """明日预测"""
     try:
-        from stock_analyzer.ml_predict import predict_ensemble
-        ai = predict_ensemble(r["_kline"], {})
+        from stock_analyzer.ml_predict import _cached_predict_ensemble
+        ai = _cached_predict_ensemble(r["_kline"], {})
         price = r.get("price", 0)
         atr = r.get("atr", price * 0.03)
 

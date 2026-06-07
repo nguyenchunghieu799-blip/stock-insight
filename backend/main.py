@@ -29,7 +29,13 @@ logger = logging.getLogger("stockinsight-api")
 START_TIME = time.time()
 
 
+# --- Simple in-memory rate limiter (token bucket) ---
+_RATE_LIMITS: dict[str, list[float]] = {}  # ip -> list of request timestamps
+_RATE_MAX = 60       # max requests
+_RATE_WINDOW = 60.0  # per window (seconds)
 @asynccontextmanager
+
+
 async def lifespan(app: FastAPI):
     logger.info("StockInsight API server starting on port 8765...")
     yield
@@ -69,6 +75,26 @@ async def add_timing_header(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Simple sliding-window rate limiter: 60 req/min per IP."""
+    ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    if ip not in _RATE_LIMITS:
+        _RATE_LIMITS[ip] = []
+    timestamps = _RATE_LIMITS[ip]
+    # Purge old entries
+    timestamps[:] = [t for t in timestamps if now - t < _RATE_WINDOW]
+    if len(timestamps) >= _RATE_MAX:
+        return JSONResponse(status_code=429, content={"detail": "Too many requests. Try again later."})
+    timestamps.append(now)
+    # Prevent unbounded growth — evict stale IPs
+    if len(_RATE_LIMITS) > 10000:
+        stale = [ip for ip, ts in _RATE_LIMITS.items() if not ts or now - ts[-1] > _RATE_WINDOW]
+        for ip in stale:
+            del _RATE_LIMITS[ip]
+    return await call_next(request)
+
 # ── 注册路由 ────────────────────────────────────────
 
 
@@ -92,9 +118,13 @@ async def shutdown():
 
 
 async def _delayed_shutdown():
-    await asyncio.sleep(1)
-    os._exit(0)
-
+    await asyncio.sleep(0.5)
+    logger.info("Shutdown complete")
+    try:
+        import signal
+        signal.raise_signal(signal.SIGTERM)
+    except Exception:
+        os._exit(0)
 
 # ── 注册子路由 ──────────────────────────────────────
 

@@ -78,11 +78,11 @@ import requests
 import pandas as pd
 import numpy as np
 
-from .logging_config import get_logger
+from ..logging_config import get_logger
 logger = get_logger("fetcher")
 
-from .config import HEADERS
-from .sectors_fallback import SECTOR_STOCKS_FALLBACK
+from ..config import HEADERS
+from ..sectors_fallback import SECTOR_STOCKS_FALLBACK
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -918,8 +918,6 @@ def get_fundamentals(code):
                 pass
     except Exception:
         pass
-
-    return result
 
     return result
 

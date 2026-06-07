@@ -635,3 +635,54 @@ body {
   border-top: 1px solid var(--bd);
   font-size: 10px; color: var(--dm); text-align: center; line-height: 1.5;
 }
+
+/* Watchlist */
+.wl-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px; border-radius: 6px; cursor: pointer;
+  transition: background 0.15s;
+}
+.wl-item:hover { background: rgba(59,130,246,0.08); }
+.wl-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.wl-code { font-size: 10px; color: var(--dm); margin-top: 2px; }
+.wl-remove {
+  background: none; border: none; color: var(--dm);
+  cursor: pointer; font-size: 16px; line-height: 1;
+  padding: 2px 4px; border-radius: 4px;
+}
+.wl-remove:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+
+/* Segmented buttons */
+.segmented-btn {
+  padding: 4px 14px; font-size: 12px; border: 1px solid var(--border);
+  background: transparent; color: var(--dm); cursor: pointer;
+  border-radius: 4px; transition: all 0.15s;
+}
+.segmented-btn.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.segmented-btn:hover:not(.active) { background: rgba(59,130,246,0.08); }
+
+/* Combined analysis text */
+.combined-text {
+  font-size: 13px; line-height: 1.7; color: var(--text);
+  padding: 4px 0;
+}
+
+/* Source dots */
+.source-dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  margin-right: 6px;
+}
+.source-dot.ok { background: #22c55e; }
+.source-dot.slow { background: #f59e0b; }
+.source-dot.error { background: #ef4444; }
+
+/* Market index cards */
+.index-card {
+  padding: 12px; border-radius: 8px; background: rgba(13,20,34,0.5);
+  border: 1px solid var(--border); min-width: 140px;
+}
+.index-name { font-size: 11px; color: var(--dm); }
+.index-price { font-size: 20px; font-weight: 700; margin: 4px 0; }
+.index-change { font-size: 12px; }

@@ -249,7 +249,7 @@ def push_daily_picks(webhook_url=None):
     picks = []
     for code in codes:
         try:
-            from cli import deep_analyze
+            from stock_analyzer.analyzer import deep_analyze
             r = deep_analyze(code, days=120)
             if r is None:
                 continue

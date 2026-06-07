@@ -13,6 +13,8 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 import warnings
+import hashlib, os
+
 warnings.filterwarnings('ignore')
 
 
@@ -23,12 +25,11 @@ warnings.filterwarnings('ignore')
 def build_features(df, fundamentals=None, lookback_days=20):
     """从K线数据构建ML特征矩阵
 
-    返回: (X, y, feature_names)
-      X: 特征矩阵
-      y: 标签（下一日涨跌方向: 1=涨, 0=跌）
+    返回: (X, y, y_pct, feature_names, fundamentals_features)
+      X: 特征矩阵  y: 涨跌方向  y_pct: 涨跌幅  feature_names: 特征名列表
     """
     if df is None or len(df) < 60:
-        return None, None, []
+        return None, None, None, [], None
 
     df = df.copy()
 
@@ -254,7 +255,7 @@ def _predict_lgb(df, fundamentals=None):
     """LightGBM 预测（降级到RF如果未安装）"""
     try:
         from lightgbm import LGBMClassifier
-        X, y, _, feature_names, _ = build_features(df, fundamentals)
+        X, y, y_pct, feature_names, _ = build_features(df, fundamentals)
         if X is None or len(y) < 30:
             return {'error': '数据不足'}
         from sklearn.model_selection import train_test_split
@@ -269,6 +270,7 @@ def _predict_lgb(df, fundamentals=None):
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
         y_proba = model.predict_proba(X_test)[:, 1]
+
         latest = X[-1:].reshape(1, -1)
         proba = model.predict_proba(latest)[0]
         importances = sorted(
@@ -289,6 +291,27 @@ def _predict_lgb(df, fundamentals=None):
         }
     except ImportError:
         return predict_direction(df, fundamentals, model_type='rf')
+
+
+
+
+# In-memory result cache (per process)
+_RESULT_CACHE = {}
+
+def _cached_predict_ensemble(df, fundamentals=None):
+    import hashlib
+    # Use shape + last 20 closing prices as cache key
+    key = hashlib.md5(
+        str(df.shape).encode() + 
+        str(df.iloc[-20:, 1].sum()).encode() +
+        str(df.iloc[-1, 1]).encode()
+    ).hexdigest()
+    if key in _RESULT_CACHE:
+        return _RESULT_CACHE[key]
+    result = predict_ensemble(df, fundamentals)
+    _RESULT_CACHE[key] = result
+    return result
+
 
 
 def predict_ensemble(df, fundamentals=None):

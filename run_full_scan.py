@@ -13,32 +13,35 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # 复用 cli.py 的分析函数（含 skip_nt + 完整返回）
-from cli import deep_analyze
+from stock_analyzer.analyzer import deep_analyze
 from stock_analyzer.fetcher import sina_real_time
 from stock_analyzer.screener import load_all_a_shares
 from stock_analyzer.config import SCAN_WORKERS
 
-CHECKPOINT_FILE = ".scan_progress"
+def _get_checkpoint_file():
+    from stock_analyzer.config import CHECKPOINT_FILE
+    return CHECKPOINT_FILE
 PER_STOCK_TIMEOUT = 45
 
 
 def load_checkpoint():
-    if not os.path.exists(CHECKPOINT_FILE):
+    if not os.path.exists(_get_checkpoint_file()):
         return set()
-    with open(CHECKPOINT_FILE, "r") as f:
+    with open(_get_checkpoint_file(), "r") as f:
         return {line.strip() for line in f if line.strip()}
 
 
 def save_checkpoint(code):
-    with open(CHECKPOINT_FILE, "a") as f:
+    with open(_get_checkpoint_file(), "a") as f:
         f.write(code + "\n")
         f.flush()
         os.fsync(f.fileno())
 
 
 def clear_checkpoint():
-    if os.path.exists(CHECKPOINT_FILE):
-        os.remove(CHECKPOINT_FILE)
+    cp = _get_checkpoint_file()
+    if os.path.exists(cp):
+        os.remove(cp)
 
 
 def main():

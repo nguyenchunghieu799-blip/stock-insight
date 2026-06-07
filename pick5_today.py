@@ -7,7 +7,7 @@ import sys, io, os, pandas as pd, numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-from cli import deep_analyze
+from stock_analyzer.analyzer import deep_analyze
 from stock_analyzer.sectors_fallback import get_sector_for_code
 
 OWNED = {'601677', '002119', '600176', '603203'}

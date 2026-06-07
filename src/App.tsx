@@ -93,28 +93,53 @@ export default function App() {
 }
 
 function Sidebar() {
-  const watchlist = [
-    { code: "600519", name: "贵州茅台", tag: "白酒龙头" },
-    { code: "300750", name: "宁德时代", tag: "电池龙头" },
-    { code: "002594", name: "比亚迪", tag: "新能源车" },
-    { code: "600036", name: "招商银行", tag: "银行龙头" },
-    { code: "300308", name: "中际旭创", tag: "光模块" },
-  ];
+  // Read watchlist from localStorage, fallback to defaults
+  const [watchlist, setWatchlist] = useState(() => {
+    try {
+      const saved = localStorage.getItem("watchlist");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [
+      { code: "600519", name: "茅台", tag: "白酒" },
+      { code: "300750", name: "宁德时代", tag: "电池" },
+      { code: "002594", name: "比亚迪", tag: "新能源车" },
+      { code: "600036", name: "招商银行", tag: "银行" },
+      { code: "300308", name: "中际旭创", tag: "光模块" },
+    ];
+  });
+
   const navigate = useNavigate();
+
+  const removeStock = (code: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = watchlist.filter((s: any) => s.code !== code);
+    setWatchlist(next);
+    localStorage.setItem("watchlist", JSON.stringify(next));
+  };
 
   return (
     <div className="sidebar">
       <div className="card">
         <div className="card-header">自选股</div>
         <div className="card-body" style={{ padding: 8 }}>
-          {watchlist.map((s) => (
-            <div key={s.code} className="wl-item" onClick={() => navigate(`/stock/${s.code}`)}>
-              <div>
+          {watchlist.map((s: any) => (
+            <div key={s.code} className="wl-item" onClick={() => navigate("/stock/" + s.code)}>
+              <div style={{ flex: 1 }}>
                 <div className="wl-name">{s.name}</div>
-                <div className="wl-code">{s.code} · {s.tag}</div>
+                <div className="wl-code">{s.code} &middot; {s.tag}</div>
               </div>
+              <button
+                className="wl-remove"
+                onClick={(e) => removeStock(s.code, e)}
+                title="删除"
+              >&times;</button>
             </div>
           ))}
+          {watchlist.length === 0 && (
+            <div style={{ color: "var(--dm)", fontSize: 12, textAlign: "center", padding: 12 }}>
+              暂无自选股，在个股页点击右上角添加
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -13,6 +13,8 @@ logs/
 reports/*.csv
 reports/*.html
 reports/*.json
+reports/*.docx
+models/
 .scan_progress
 .kline_warmup_progress.json
 .warmup_progress.json

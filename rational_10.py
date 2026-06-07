@@ -10,7 +10,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 import pandas as pd
 import numpy as np
 
-from cli import deep_analyze
+from stock_analyzer.analyzer import deep_analyze
 from stock_analyzer.sectors_fallback import get_sector_for_code
 from stock_analyzer.report_html import generate_screener_report
 

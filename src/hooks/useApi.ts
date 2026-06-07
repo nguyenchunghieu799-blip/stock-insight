@@ -16,8 +16,8 @@ export function useApi<T>() {
         setError(json.error || "Unknown error");
       }
       return json;
-    } catch (e: any) {
-      const msg = e.message || "网络请求失败";
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
       return { success: false, data: null as any, error: msg, freshness: "stale", timing_ms: 0 };
     } finally {
@@ -25,7 +25,7 @@ export function useApi<T>() {
     }
   }, []);
 
-  const postApi = useCallback(async (path: string, body?: any): Promise<ApiResponse<T>> => {
+  const postApi = useCallback(async (path: string, body?: unknown): Promise<ApiResponse<T>> => {
     setLoading(true);
     setError(null);
     try {
@@ -37,8 +37,8 @@ export function useApi<T>() {
       const json: ApiResponse<T> = await res.json();
       if (!json.success) setError(json.error || "Unknown error");
       return json;
-    } catch (e: any) {
-      const msg = e.message || "网络请求失败";
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
       return { success: false, data: null as any, error: msg, freshness: "stale", timing_ms: 0 };
     } finally {
