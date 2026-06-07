@@ -33,17 +33,26 @@
 | Bug 修复 | ✅ 根因分析 | ✅ 第二意见 |
 | 图片/视频 | — | ✅ 报告配图、截图验证 |
 
+## 成本对比
+
+| | Claude Code | Codex |
+|------|:--:|:--:|
+| 费用 | **低（基准）** | **高（~5倍）** |
+| 性价比 | 日常主力，量大便宜 | 按需调用，贵但补盲区 |
+
+**原则：能用 Claude 的不用 Codex，只有 Claude 做不了的才派 Codex。**
+
 ## 触发规则
 
-| 场景 | 谁来做 |
-|------|:--:|
-| 改超过3个文件 | Claude Code |
-| 需要架构设计/Plan | Claude Code |
-| 需要"第二意见"审查 | Codex review |
-| 需要生成图片/视频 | Codex |
-| 需要深度推理排bug | Claude Code |
-| 简单脚本/一次性任务 | Codex |
-| 需要跨会话上下文 | Claude Code (MEMORY.md) |
+| 场景 | 谁来做 | 原因 |
+|------|:--:|------|
+| 改超过3个文件 | Claude Code | 便宜+擅长 |
+| 需要架构设计/Plan | Claude Code | 便宜+擅长 |
+| 需要"第二意见"审查 | Codex review | 独立视角，Claude做不了 |
+| 需要生成图片/视频 | Codex | Claude做不了 |
+| 需要深度推理排bug | Claude Code | 便宜+擅长 |
+| 简单脚本/一次性任务 | Claude Code | 便宜，没必要用贵的 |
+| 需要跨会话上下文 | Claude Code (MEMORY.md) | 便宜+独有能力 |
 
 ## 协作流程
 
