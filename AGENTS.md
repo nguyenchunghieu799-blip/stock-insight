@@ -2,24 +2,57 @@
 
 本项目由 **Claude Code** 和 **Codex (OpenAI)** 共同维护。
 
+## 能力矩阵
+
+| 领域 | Claude Code | Codex | 结论 |
+|------|:--:|:--:|------|
+| **大项目重构** | ✅ 1M token，跨50+文件 | ❌ 上下文小，易丢 | Claude |
+| **深度推理** | ✅ Plan模式+思考模式 | ⚠️ 一般 | Claude |
+| **代码审查** | ⚠️ 能审但非独立 | ✅ 独立视角（不同模型） | Codex |
+| **Agent编排** | ✅ 子Agent并行+状态追踪 | ❌ | Claude |
+| **Git全流程** | ✅ commit/PR/worktree | ⚠️ | Claude |
+| **生成图片** | ❌ 只能读不能画 | ✅ DALL-E / GPT Image | Codex |
+| **视频理解/生成** | ❌ | ✅ 帧提取+生成 | Codex |
+| **音频处理** | ❌ | ✅ Whisper转写 | Codex |
+| **网页截图/视觉验证** | ⚠️ headless browser | ✅ 可视浏览器 | Codex |
+| **沙箱执行** | ❌ 直接本地 | ✅ 隔离沙箱 | Codex |
+| **简单脚本** | ⚠️ 牛刀杀鸡 | ✅ 轻快 | Codex |
+| **定时任务** | ✅ Cron持久化 | ❌ | Claude |
+| **跨会话记忆** | ✅ MEMORY.md | ❌ | Claude |
+| **大文件处理** | ✅ PDF/图片/Word/Excel | ⚠️ | Claude |
+| **系统级操作** | ✅ Bash/进程/DB | ⚠️ | Claude |
+
 ## 角色分工
 
 | 角色 | Claude Code | Codex |
 |------|:--:|:--:|
-| 主力开发 | ✅ 复杂功能、架构设计、大文件重构 | 补位：简单脚本、批量替换 |
-| 代码审查 | — | ✅ 独立审查（不同模型，不同视角） |
-| 数据分析 | ✅ 股票分析全链路 | — |
-| 文档/技能维护 | ✅ SKILL.md、DOCX 报告 | — |
-| Bug 修复 | ✅ 根因分析 | ✅ 第二意见验证 |
+| 主力开发 | ✅ 复杂功能、架构、大文件重构 | 补位：简单脚本、批量替换 |
+| 代码审查 | — | ✅ 独立审查（不同模型视角） |
+| 股票分析 | ✅ 全链路量化分析 | — |
+| 文档维护 | ✅ SKILL.md、DOCX | — |
+| Bug 修复 | ✅ 根因分析 | ✅ 第二意见 |
+| 图片/视频 | — | ✅ 报告配图、截图验证 |
+
+## 触发规则
+
+| 场景 | 谁来做 |
+|------|:--:|
+| 改超过3个文件 | Claude Code |
+| 需要架构设计/Plan | Claude Code |
+| 需要"第二意见"审查 | Codex review |
+| 需要生成图片/视频 | Codex |
+| 需要深度推理排bug | Claude Code |
+| 简单脚本/一次性任务 | Codex |
+| 需要跨会话上下文 | Claude Code (MEMORY.md) |
 
 ## 协作流程
 
 ```
-Claude Code 改代码 → Codex review → 意见分歧人工判断
-Codex 改代码 → Claude Code 最终检查 → 确认无误后提交
+Claude Code 写代码 → Codex review → 分歧人工判断
+Codex 改代码 → Claude Code 最终检查 → 确认提交
+Codex 生成图片/视频 → Claude Code 验证 → 合入报告
+大改动前先 commit，两边在同一基准上干活
 ```
-
-
 
 ## 新增功能
 
@@ -30,23 +63,17 @@ Codex 改代码 → Claude Code 最终检查 → 确认无误后提交
 - 27种K线形态识别: 三只乌鸦、黄昏之星、早晨之星、阳包阴、阴包阳、锤子线、射击之星等
 
 ### 庄家意图分析 (DOCX报告)
-- 使用 nalyze_manipulator_intention() 识别庄家四阶段
+- 使用 analyze_manipulator_intention() 识别庄家四阶段
 - 四阶段: 建仓 → 洗盘 → 拉升 → 出货 (含置信度)
 - 输出: phase(当前阶段)、signals(判断依据列表)、volume_analysis(成交量分析)、assessment(综合评估)、risk_note(风险提示)
 
+### 双层过滤选股 (ml_scan.py)
 
-
-## 双层过滤选股
-
-### ml_scan.py — ML过滤+自动降级选股工具
-
-`
+```
 python ml_scan.py                    # 主板 top10，双层过滤
 python ml_scan.py --mode full        # 全A股
 python ml_scan.py --top-n 20         # 主板 top20
-`
-
-### 过滤层级
+```
 
 | 层级 | PE | PB | 量比 | 换手率 | ML条件 | 标记 |
 |:----:|:--:|:--:|:----:|:------:|:------:|:----:|
@@ -55,20 +82,18 @@ python ml_scan.py --top-n 20         # 主板 top20
 
 - Tier1 选不够 → 自动降级到 Tier2
 - 每个候选标注所属层级，Tier2 会额外提示风险更高
+
 ## 速度优化记录
 
 | 优化项 | 优化前 | 优化后 | 方案 |
 |:-----:|:------:|:------:|------|
-| **周末K线不更新** | **数据停在上周** | **周末也拉取** | cache.py 放宽 is_weekend 条件，days_passed>=2时允许周末增量 |
-| 宏观数据API | 23.8s | 0.006s | SQLite缓存(7天TTL) + macro_cache表 |
+| 周末K线不更新 | 数据停在上周 | 周末也拉取 | cache.py 放宽 is_weekend 条件 |
+| 宏观数据API | 23.8s | 0.006s | SQLite缓存(7天TTL) |
 | ML三模型训练 | 4.7s | 0.001s | 内存缓存 _RESULT_CACHE |
-| ML跨进程复用 | 4.7s | 0.01s | 磁盘缓存 models/pred_{hash}.pkl |
-| gen_docx报告 | 47s | 12.9s | 以上两项合计 |
-|:-----:|:------:|:------:|------|
-| 宏观数据API | 23.8s | 0.006s | SQLite缓存(7天TTL) + macro_cache表 |
-| ML三模型训练 | 4.7s | 0.001s | 内存缓存 _RESULT_CACHE |
-| ML跨进程复用 | 4.7s | 0.01s | 磁盘缓存 models/pred_{hash}.pkl |
-| gen_docx_report | 47s | 12.9s | 以上两项合计 |
+| ML跨进程复用 | 4.7s | 0.01s | 磁盘缓存 models/ |
+| gen_docx报告 | 47s | 12.9s | 以上三项合计 |
+| 后端分析API | 每次重算 | 5分钟TTL | _ANALYSIS_CACHE (backend) |
+| ML预测缓存 | 每次重训 | 0ms命中 | _cached_predict_ensemble |
 
 ## 工作规则
 
@@ -86,8 +111,10 @@ python ml_scan.py --top-n 20         # 主板 top20
 - 数据源：新浪/腾讯/Baostock/东方财富/akshare/Tushare/TickFlow
 - 数据库：SQLite (stock_cache.db ~152MB)
 - 完整技能文档：`C:\Users\47535\.claude\skills\stock-quant-analysis\SKILL.md`
+- 最近重构：fetcher.py → fetcher/ 包、前端组件化、ML缓存、analyzer.py 解耦
 
-## 当前状态
+## 当前状态 (2026-06-07)
 
-- 5个文件有未提交改动（cli.py +194行、backend/main.py +34行、backend/routers/analysis.py 有 bug、run_full_scan.py 重构中、config.py checkpoint改名）
-- 2个临时脚本待清理：`_edit_script.py`、`_fix2.py`
+- 工作区干净，所有变更已提交 (07ed305)
+- 37文件变更：fetcher包重构 + 前端组件化 + ML缓存 + 死代码清理
+- fetcher/__init__.py 1495行单体过大，后续可拆分子模块
