@@ -122,8 +122,9 @@ python ml_scan.py --top-n 20         # 主板 top20
 - 完整技能文档：`C:\Users\47535\.claude\skills\stock-quant-analysis\SKILL.md`
 - 最近重构：fetcher.py → fetcher/ 包、前端组件化、ML缓存、analyzer.py 解耦
 
-## 当前状态 (2026-06-07)
+## 当前状态 (2026-06-09)
 
-- 工作区干净，所有变更已提交 (07ed305)
-- 37文件变更：fetcher包重构 + 前端组件化 + ML缓存 + 死代码清理
+- 仓库已公开: https://github.com/nguyenchunghieu799-blip/stock-insight
+- MIT LICENSE 开源
+- README.md 已上线
 - fetcher/__init__.py 1495行单体过大，后续可拆分子模块
