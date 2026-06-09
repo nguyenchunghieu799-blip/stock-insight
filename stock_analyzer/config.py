@@ -121,6 +121,6 @@ SCAN_WORKERS = 8              # 扫描并行线程数
 
 # ── TuShare（可选增强数据源）────────────────────
 
-TUSHARE_TOKEN = os.environ.get("TUSHARE_TOKEN", "") or "ea8d30ff598a1a0922d3dcfd8377b0222d67b206c5b0d9379646de32"
+TUSHARE_TOKEN = os.environ.get("TUSHARE_TOKEN", "")
 # 注册地址: https://tushare.pro/register
 # 设置方式: set TUSHARE_TOKEN=your_token （或直接改此处）
