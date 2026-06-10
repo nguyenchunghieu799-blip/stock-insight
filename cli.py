@@ -164,9 +164,21 @@ def build_parser():
                      choices=["ma_cross","macd_cross","rsi_reversal","bollinger","ma_trend","momentum_breakout","grid"],
                      help="策略名称（默认ma_cross）")
     btp.add_argument("--compare", action="store_true", help="多策略对比")
+    btp.add_argument("--strategies", type=str, default=None,
+                     help="对比策略列表，逗号分隔（如 ma_cross,macd_cross,rsi_reversal）")
     btp.add_argument("--optimize", action="store_true", help="参数优化")
     btp.add_argument("--days", type=int, default=365, help="回测天数")
     btp.add_argument("--capital", type=int, default=100000, help="初始资金")
+    btp.add_argument("--commission", type=float, default=0.0003, help="手续费率（默认0.0003）")
+    btp.add_argument("--slippage", type=float, default=0.001, help="滑点（默认0.001）")
+    btp.add_argument("--position-pct", type=float, default=1.0, help="仓位比例（默认1.0）")
+    btp.add_argument("--output", "-o", type=str, default=None, help="导出JSON文件路径")
+    btp.add_argument("--stop-loss", type=float, default=None, metavar="PCT",
+                     help="固定止损比例（如 0.08=8%%亏损止损）")
+    btp.add_argument("--take-profit", type=float, default=None, metavar="PCT",
+                     help="固定止盈比例（如 0.15=15%%盈利止盈）")
+    btp.add_argument("--trailing-stop", type=float, default=None, metavar="PCT",
+                     help="移动止损比例（如 0.05=从高点回撤5%%止损）")
 
     # === ml ===
     mlp = sub.add_parser("ml", help="机器学习预测")
@@ -758,15 +770,17 @@ def _print_full_analysis(code, days=365, fast=False):
     # L5: 策略回测（复用 kline）
     sep("L5 策略回测")
     try:
-        from stock_analyzer.backtest import compare_strategies
-        bt = compare_strategies(kline, ['ma_cross','macd_cross','ma_trend','rsi_reversal'], 100000)
+        from stock_analyzer.backtest import compare_strategies, DEFAULT_COMPARE_STRATEGIES
+        bt = compare_strategies(kline, DEFAULT_COMPARE_STRATEGIES, 100000, verbose=False)
         if bt:
+            bench = (float(kline['收盘'].iloc[-1]) / float(kline['收盘'].iloc[0]) - 1) * 100
             best = max(bt.items(), key=lambda x: x[1]['metrics']['夏普比率'])
-            print(f"  最优策略: {bt[best[0]]['name']} (夏普{best[1]['metrics']['夏普比率']:.2f})")
-            for s, res in list(bt.items())[:4]:
+            print(f"  基准(买入持有): {bench:.1f}%")
+            print(f"  最优策略: {bt[best[0]]['name']} (夏普{best[1]['metrics']['夏普比率']:.2f} 超额{best[1]['metrics']['超额收益%']:+.1f}%)")
+            for s, res in list(bt.items())[:5]:
                 m = res['metrics']
-                bar = '█' * int(m['总收益率%']/20)
-                print(f"  {res['name']:<12} {bar} {m['总收益率%']:.0f}%  夏普{m['夏普比率']:.2f}  回撤{m['最大回撤%']:.0f}%")
+                bar = '█' * int(max(m['总收益率%'], 0) / 15)
+                print(f"  {res['name']:<12} {bar} {m['总收益率%']:.0f}%(超额{m['超额收益%']:+.0f}%)  夏普{m['夏普比率']:.2f}  回撤{m['最大回撤%']:.0f}%")
     except Exception:
         print("  回测数据不足")
 
@@ -1386,7 +1400,8 @@ def cmd_advanced(args):
 def cmd_backtest(args):
     """策略回测"""
     from stock_analyzer.cache import cached_kline
-    from stock_analyzer.backtest import run_backtest, compare_strategies, optimize_strategy, STRATEGIES
+    from stock_analyzer.backtest import (run_backtest, compare_strategies, optimize_strategy,
+                                          STRATEGIES, DEFAULT_COMPARE_STRATEGIES, export_backtest_json)
 
     print(f"加载 {args.code} K线数据...")
     kline = cached_kline(args.code, days=args.days)
@@ -1394,44 +1409,90 @@ def cmd_backtest(args):
         print("K线数据不足（至少60天）")
         return
 
-    print(f"数据: {len(kline)} 天  |  初始资金: {args.capital:,}")
+    print(f"数据: {len(kline)} 天  |  初始资金: {args.capital:,}  |  "
+          f"手续费: {args.commission:.4f}  |  滑点: {args.slippage:.3f}")
+
+    bt_kwargs = dict(initial_capital=args.capital, commission=args.commission,
+                     slippage=args.slippage, position_pct=args.position_pct,
+                     stop_loss=args.stop_loss, take_profit=args.take_profit,
+                     trailing_stop=args.trailing_stop)
 
     if args.compare:
-        print(f"\n{'='*60}")
-        print("多策略对比回测")
-        print(f"{'='*60}")
-        results = compare_strategies(kline, initial_capital=args.capital)
-        print(f"{'策略':<16} {'收益率%':<10} {'夏普':<8} {'回撤%':<8} {'胜率%':<8} {'交易':<6}")
-        print("-" * 60)
+        strat_list = None
+        if args.strategies:
+            strat_list = [s.strip() for s in args.strategies.split(",")]
+        print(f"\n{'='*70}")
+        print(f"多策略对比回测 ({len(strat_list or DEFAULT_COMPARE_STRATEGIES)}个策略)")
+        print(f"{'='*70}")
+        results = compare_strategies(kline, strat_list, **bt_kwargs)
+        if not results:
+            print("所有策略均无有效信号")
+            return
+        # 基准收益
+        bench = (float(kline['收盘'].iloc[-1]) / float(kline['收盘'].iloc[0]) - 1) * 100
+        print(f"  基准(买入持有): {bench:.1f}%")
+        header = f"{'策略':<16} {'收益率%':<10} {'超额%':<8} {'夏普':<8} {'索提诺':<8} {'卡玛':<8} {'回撤%':<8} {'交易':<6}"
+        print(header)
+        print("-" * len(header))
         for s_name, r in results.items():
             m = r['metrics']
-            print(f"{r['name']:<16} {m['总收益率%']:<10.1f} {m['夏普比率']:<8.2f} "
-                  f"{m['最大回撤%']:<8.1f} {m['胜率%']:<8.0f} {m['交易次数']:<6}")
+            print(f"{r['name']:<16} {m['总收益率%']:<10.1f} {m['超额收益%']:<8.1f} "
+                  f"{m['夏普比率']:<8.2f} {m['索提诺比率']:<8.2f} {m['卡玛比率']:<8.2f} "
+                  f"{m['最大回撤%']:<8.1f} {m['交易次数']:<6}")
+        best = max(results.items(), key=lambda x: x[1]['metrics']['夏普比率'])
+        print(f"\n最优: {best[1]['name']} (夏普{best[1]['metrics']['夏普比率']:.2f})")
+
+        if args.output:
+            export_backtest_json({'metrics': {s: r['metrics'] for s, r in results.items()},
+                                  'trades': [], 'equity_curve': [],
+                                  'summary': f"{len(results)}个策略对比"},
+                                 args.output)
+            print(f"结果已导出: {args.output}")
 
     elif args.optimize:
         print(f"\n参数优化: {STRATEGIES[args.strategy]['name']}")
         best = optimize_strategy(kline, args.strategy)
         if best:
             print(f"最优参数: {best['params']}")
-            print(f"收益率: {best['metrics']['总收益率%']:.1f}%  "
-                  f"夏普: {best['metrics']['夏普比率']:.2f}  "
-                  f"回撤: {best['metrics']['最大回撤%']:.1f}%")
+            m = best['metrics']
+            print(f"  样本内({best.get('train_days','?')}天): "
+                  f"收益率{m['总收益率%']:.1f}%  夏普{m['夏普比率']:.2f}  "
+                  f"回撤{m['最大回撤%']:.1f}%")
+            if 'test_metrics' in best:
+                tm = best['test_metrics']
+                print(f"  样本外({best.get('test_days','?')}天): "
+                      f"收益率{tm['总收益率%']:.1f}%  夏普{tm['夏普比率']:.2f}  "
+                      f"回撤{tm['最大回撤%']:.1f}%")
+                oos_diff = tm['总收益率%'] - m['总收益率%']
+                warn = " ⚠️过拟合" if abs(oos_diff) > 20 else ""
+                print(f"  样本内外收益差: {oos_diff:+.1f}%{warn}")
+        else:
+            print("优化失败，无法生成有效信号")
 
     else:
         s_info = STRATEGIES[args.strategy]
         print(f"\n策略: {s_info['name']}  参数: {s_info['default']}")
-        result = run_backtest(kline, s_info['fn'], s_info['default'], args.capital)
+        result = run_backtest(kline, s_info['fn'], s_info['default'], **bt_kwargs)
         if result:
             m = result['metrics']
-            print(f"{'='*50}")
-            print(f"收益率: {m['总收益率%']:.1f}%  夏普: {m['夏普比率']:.2f}  回撤: {m['最大回撤%']:.1f}%")
-            print(f"胜率: {m['胜率%']:.0f}%  交易: {m['交易次数']}次  盈亏比: {m['盈亏比']:.2f}")
+            print(f"{'='*55}")
+            print(f"收益率: {m['总收益率%']:.1f}%  年化: {m['年化收益率%']:.1f}%")
+            print(f"夏普: {m['夏普比率']:.2f}  索提诺: {m['索提诺比率']:.2f}  卡玛: {m['卡玛比率']:.2f}")
+            print(f"回撤: {m['最大回撤%']:.1f}%  胜率: {m['胜率%']:.0f}%  交易: {m['交易次数']}次  盈亏比: {m['盈亏比']:.2f}")
+            print(f"基准(买入持有): {m['基准收益%']:.1f}%  超额收益: {m['超额收益%']:+.1f}%")
             print(f"最终资金: {m['最终资金']:,.0f}")
             if result['trades']:
                 print(f"\n最近5笔交易:")
                 for t in result['trades'][-5:]:
                     pnl = f" 盈亏{t['pnl']:+.0f}" if 'pnl' in t else ""
-                    print(f"  {t['date']} {t['action']} @{t['price']}{pnl}")
+                    reason = f" [{t.get('exit_reason','')}]" if t.get('exit_reason') and t['action'] == 'SELL' else ""
+                    print(f"  {t['date']} {t['action']} @{t['price']}{pnl}{reason}")
+
+            if args.output:
+                export_backtest_json(result, args.output)
+                print(f"\n结果已导出: {args.output}")
+        else:
+            print("回测失败，无法生成有效信号")
 
 
 def cmd_ml(args):

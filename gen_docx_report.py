@@ -13,7 +13,7 @@ def generate(code: str):
     from stock_analyzer.ml_predict import _cached_predict_ensemble
     from stock_analyzer.advanced import macro_market_signal
     from stock_analyzer.nl_report import generate_bull_bear_debate
-    from stock_analyzer.backtest import compare_strategies
+    from stock_analyzer.backtest import compare_strategies, DEFAULT_COMPARE_STRATEGIES
     from stock_analyzer.patterns import generate_kline_interpretation_with_today
     from stock_analyzer.psychology import analyze_manipulator_intention
 
@@ -51,7 +51,7 @@ def generate(code: str):
         "ai_prediction": {"direction": ml.get("ensemble_direction", "?"), "confidence": ml.get("ensemble_confidence", 50)}})
     try: ff = cached_fund_flow(code, days=5); total_flow = round(ff["主力净流入-净额"].sum() / 1e8, 2)
     except: total_flow = 0
-    try: bt = compare_strategies(kline, ["ma_cross", "macd_cross", "ma_trend", "rsi_reversal"], 100000)
+    try: bt = compare_strategies(kline, DEFAULT_COMPARE_STRATEGIES, 100000)
     except: bt = {}
     try: macro = macro_market_signal()
     except: macro = {}

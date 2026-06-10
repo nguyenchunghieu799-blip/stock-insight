@@ -84,15 +84,16 @@ class TestQuant(unittest.TestCase):
 
     def test_backtest(self):
         """回测有交易记录"""
+        from stock_analyzer.backtest import run_backtest, strategy_ma_cross
         df = _make_df(200)
-        df = analysis.full_technical_analysis(df)
-        result = quant.backtest_ma_crossover(df, fast_ma=5, slow_ma=20)
+        result = run_backtest(df, strategy_ma_cross, {"fast": 5, "slow": 20})
         self.assertGreater(len(result["trades"]), 0)
 
     def test_backtest_edge(self):
         """数据太少时回测为 0 笔交易"""
+        from stock_analyzer.backtest import run_backtest, strategy_ma_cross
         df = _make_df(5)
-        result = quant.backtest_ma_crossover(df, fast_ma=5, slow_ma=20)
+        result = run_backtest(df, strategy_ma_cross, {"fast": 5, "slow": 20})
         self.assertEqual(len(result["trades"]), 0)
 
 

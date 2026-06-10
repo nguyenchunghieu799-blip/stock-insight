@@ -204,14 +204,16 @@ def ultimate_analysis(code: str):
     # ── L5 策略回测 ──
     print(f"\n  ═══ L5 策略回测 ═══")
     try:
-        from .backtest import compare_strategies
-        bt = compare_strategies(kline, ['ma_cross','macd_cross','ma_trend','rsi_reversal'], 100000)
+        from .backtest import compare_strategies, DEFAULT_COMPARE_STRATEGIES
+        bt = compare_strategies(kline, DEFAULT_COMPARE_STRATEGIES, 100000, verbose=False)
         if bt:
+            bench = (float(kline['收盘'].iloc[-1]) / float(kline['收盘'].iloc[0]) - 1) * 100
             best = max(bt.items(), key=lambda x: x[1]['metrics']['夏普比率'])
-            print(f"  最优: {bt[best[0]]['name']} (夏普{best[1]['metrics']['夏普比率']:.2f})")
-            for s, res in list(bt.items())[:4]:
-                m = res['metrics']; bar = '█'*int(m['总收益率%']/20)
-                print(f"  {res['name']:<12} {bar} {m['总收益率%']:.0f}% 夏普{m['夏普比率']:.2f} 回撤{m['最大回撤%']:.0f}%")
+            print(f"  基准(买入持有): {bench:.1f}%")
+            print(f"  最优: {bt[best[0]]['name']} (夏普{best[1]['metrics']['夏普比率']:.2f} 超额{best[1]['metrics']['超额收益%']:+.1f}%)")
+            for s, res in list(bt.items())[:5]:
+                m = res['metrics']; bar = '█'*int(max(m['总收益率%'],0)/15)
+                print(f"  {res['name']:<12} {bar} {m['总收益率%']:.0f}%(超额{m['超额收益%']:+.0f}%) 夏普{m['夏普比率']:.2f} 回撤{m['最大回撤%']:.0f}%")
     except Exception: print("  回测数据不足")
 
     # ── L6 AI预测 ──
